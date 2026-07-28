@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IMA Generator - Optimización de Imágenes</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --accent: #3b82f6;
+      --accent-light: #dbeafe;
+      --accent-dark: #1d4ed8;
+      --success: #10b981;
+      --success-light: #d1fae5;
+      --danger: #ef4444;
+      --danger-light: #fee2e2;
+      --warning: #f59e0b;
+      --warning-light: #fef3c7;
+      --radius-sm: 6px;
+      --radius: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+      --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── SVG Icons ─────────────────────────────────────────── */
+    .icon {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      flex-shrink: 0;
+    }
+    .icon-sm { width: 14px; height: 14px; }
+    .icon-lg { width: 22px; height: 22px; }
+
+    /* ── Topbar ────────────────────────────────────────────── */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .topbar-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .topbar-brand svg {
+      width: 28px;
+      height: 28px;
+      color: var(--accent);
+    }
+
+    .topbar-brand h1 {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .topbar-divider {
+      width: 1px;
+      height: 28px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    /* Topbar controls */
+    .topbar-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .control-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+
+    .format-select {
+      padding: 7px 32px 7px 10px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.8125rem;
+      font-family: inherit;
+      font-weight: 500;
+      transition: var(--transition);
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      cursor: pointer;
+    }
+
+    .format-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-light);
+    }
+
+    /* Dropzone inline */
+    .topbar-dropzone {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      cursor: pointer;
+      transition: var(--transition);
+      min-width: 0;
+      flex: 1;
+      max-width: 320px;
+    }
+
+    .topbar-dropzone:hover, .topbar-dropzone.dragover {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    .topbar-dropzone.has-file {
+      border-style: solid;
+      border-color: var(--success);
+      background: var(--success-light);
+    }
+
+    .topbar-dropzone input { display: none; }
+
+    .dropzone-text {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+
+    .topbar-dropzone.has-file .dropzone-text {
+      color: var(--success);
+      font-weight: 500;
+    }
+
+    .dropzone-filename {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      font-family: inherit;
+      white-space: nowrap;
+      height: 36px;
+    }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-dark); }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+    .btn-success:hover { background: #059669; }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+    .btn-danger:hover { background: #dc2626; }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text-secondary);
+      border: 1.5px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--bg); border-color: var(--text-muted); }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-muted);
+      padding: 8px;
+    }
+    .btn-ghost:hover { background: var(--bg); color: var(--text); }
+
+    /* Execution controls */
+    .exec-controls {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    /* ── Main Content ──────────────────────────────────────── */
+    .main-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Stats Bar ─────────────────────────────────────────── */
+    .stats-bar {
+      display: none;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+
+    .stats-bar.visible { display: grid; }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    .stat-number {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-number.success { color: var(--success); }
+    .stat-number.danger { color: var(--danger); }
+
+    .stat-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* ── Progress Section ──────────────────────────────────── */
+    .progress-section {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+    }
+
+    .progress-section.visible { display: block; }
+
+    .progress-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 12px;
+    }
+
+    .progress-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-idle { background: var(--border-light); color: var(--text-muted); }
+    .status-running { background: var(--accent-light); color: var(--accent-dark); }
+    .status-measuring { background: #ede9fe; color: #6d28d9; }
+    .status-downloading { background: var(--warning-light); color: #b45309; }
+    .status-optimizing { background: #ccfbf1; color: #0f766e; }
+    .status-paused { background: var(--warning-light); color: #b45309; }
+    .status-stopped { background: var(--danger-light); color: var(--danger); }
+    .status-done { background: var(--success-light); color: #047857; }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .status-running .status-dot { background: var(--accent); }
+    .status-measuring .status-dot { background: #6d28d9; }
+    .status-downloading .status-dot { background: #b45309; }
+    .status-optimizing .status-dot { background: #0f766e; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .progress-track {
+      height: 6px;
+      background: var(--border-light);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #60a5fa);
+      border-radius: 3px;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      width: 0%;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+      margin-bottom: 14px;
+    }
+
+    /* Log panel */
+    .log-panel {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.75rem;
+      max-height: 200px;
+      overflow-y: auto;
+      line-height: 1.8;
+      color: var(--text-secondary);
+    }
+
+    .log-panel::-webkit-scrollbar { width: 5px; }
+    .log-panel::-webkit-scrollbar-track { background: transparent; }
+    .log-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .log-entry { padding: 1px 0; }
+    .log-time { color: var(--text-muted); margin-right: 8px; }
+    .log-ok { color: var(--success); }
+    .log-error { color: var(--danger); }
+    .log-warn { color: var(--warning); }
+    .log-info { color: var(--accent); }
+
+    /* ── Results Section ───────────────────────────────────── */
+    .results-section {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .results-section.visible { display: block; }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .results-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .results-count {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-left: 8px;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .table-wrapper::-webkit-scrollbar { height: 5px; }
+    .table-wrapper::-webkit-scrollbar-track { background: transparent; }
+    .table-wrapper::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      min-width: 800px;
+    }
+
+    th {
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg);
+      padding: 10px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-light);
+      vertical-align: middle;
+    }
+
+    tbody tr { transition: var(--transition); }
+    tbody tr:hover { background: var(--bg); }
+
+    tr.row-error { background: var(--danger-light); }
+    tr.row-error:hover { background: #fecaca; }
+
+    tr.row-over-limit { background: var(--warning-light); }
+    tr.row-over-limit:hover { background: #fde68a; }
+
+    tr.row-critical { background: var(--danger-light); }
+    tr.row-critical:hover { background: #fecaca; }
+
+    .cell-num {
+      font-weight: 600;
+      color: var(--text-muted);
+      width: 40px;
+    }
+
+    .cell-url {
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.75rem;
+    }
+
+    .url-link {
+      color: var(--accent);
+      text-decoration: none;
+      transition: var(--transition);
+    }
+
+    .url-link:hover {
+      color: var(--accent-dark);
+      text-decoration: underline;
+    }
+
+    .cell-image {
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 500;
+      font-size: 0.75rem;
+    }
+
+    .cell-size {
+      font-variant-numeric: tabular-nums;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+    }
+
+    .cell-saved {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      font-size: 0.8125rem;
+    }
+
+    .cell-saved.high { color: var(--success); }
+    .cell-saved.medium { color: var(--warning); }
+    .cell-saved.low { color: var(--text-muted); }
+
+    .cell-dims {
+      font-variant-numeric: tabular-nums;
+      font-size: 0.75rem;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-webp { background: var(--accent-light); color: var(--accent-dark); }
+    .badge-avif { background: #ede9fe; color: #6d28d9; }
+    .badge-jpeg, .badge-jpg { background: var(--warning-light); color: #b45309; }
+    .badge-png { background: #ccfbf1; color: #0f766e; }
+    .badge-cached { background: var(--success-light); color: #047857; }
+    .badge-method { background: var(--border-light); color: var(--text-secondary); font-weight: 500; }
+
+    .badge-error {
+      background: var(--danger);
+      color: white;
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      font-weight: 500;
+    }
+
+    .badge-size-warn {
+      background: var(--warning);
+      color: white;
+      font-size: 0.625rem;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 600;
+      cursor: help;
+    }
+
+    .badge-category {
+      background: var(--border-light);
+      color: var(--text-secondary);
+      font-size: 0.625rem;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-quality {
+      background: #ede9fe;
+      color: #6d28d9;
+      font-size: 0.625rem;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    /* Download button */
+    .dl-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: var(--transition);
+      border: none;
+      cursor: pointer;
+    }
+
+    .dl-btn:hover {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text-muted);
+    }
+
+    .empty-state svg {
+      width: 40px;
+      height: 40px;
+      margin-bottom: 12px;
+      opacity: 0.4;
+    }
+
+    .empty-state-title {
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    /* ── CSV Preview ───────────────────────────────────────── */
+    .csv-preview {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .csv-preview.visible { display: block; }
+
+    .csv-preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .csv-preview-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .csv-preview-count {
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .csv-preview-list {
+      max-height: 160px;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+
+    .csv-preview-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 20px;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .csv-preview-item:hover { background: var(--bg); }
+
+    .csv-item-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .csv-item-url {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .csv-item-img {
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 200px;
+    }
+
+    /* ── Toast ─────────────────────────────────────────────── */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-width: 380px;
+      width: calc(100% - 40px);
+    }
+
+    .toast {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: toastIn 0.25s ease;
+      font-size: 0.8125rem;
+    }
+
+    @keyframes toastIn {
+      from { transform: translateY(10px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .toast svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .toast-success { border-left: 3px solid var(--success); }
+    .toast-success svg { color: var(--success); }
+    .toast-error { border-left: 3px solid var(--danger); }
+    .toast-error svg { color: var(--danger); }
+    .toast-info { border-left: 3px solid var(--accent); }
+    .toast-info svg { color: var(--accent); }
+
+    /* ── Modal ─────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(4px);
+      z-index: 300;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .modal-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      max-width: 420px;
+      width: calc(100% - 48px);
+      box-shadow: var(--shadow-lg);
+      text-align: center;
+    }
+
+    .modal-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      background: var(--accent-light);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+    }
+
+    .modal-title {
+      font-size: 1.125rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .modal-desc {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    .modal-stats {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-bottom: 24px;
+      font-size: 0.8125rem;
+    }
+
+    .modal-stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .modal-stat-value {
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: var(--text);
+    }
+
+    .modal-stat-label {
+      color: var(--text-muted);
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .modal-actions .btn { flex: 1; }
+
+    /* ── Hidden ────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+
+    /* ── Mobile ────────────────────────────────────────────── */
+    @media (max-width: 767px) {
+      .topbar-inner { padding: 10px 16px; gap: 12px; }
+      .topbar-divider { display: none; }
+      .topbar-controls { gap: 8px; }
+      .topbar-dropzone { max-width: none; flex-basis: 100%; order: 10; }
+      .control-label { display: none; }
+      .main-content { padding: 16px; gap: 16px; }
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .stats-bar .stat-card:last-child { grid-column: span 2; }
+      .log-panel { max-height: 150px; }
+      .progress-section, .results-section { border-radius: var(--radius-sm); }
+    }
+
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .topbar-inner { padding: 12px 20px; }
+      .main-content { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Resume Dialog -->
+  <div class="modal-overlay hidden" id="resumeModal">
+    <div class="modal-card">
+      <div class="modal-icon">
+        <svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="1 4 1 10 7 10"/>
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+        </svg>
+      </div>
+      <h3 class="modal-title">Batch incompleto detectado</h3>
+      <p class="modal-desc" id="resumeModalDesc">
+        Se encontró un procesamiento anterior de este CSV.
+      </p>
+      <div class="modal-stats" id="resumeModalStats"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btnResumeNew" onclick="dismissResume()">
+          Empezar de nuevo
+        </button>
+        <button class="btn btn-primary" id="btnResumeContinue" onclick="resumeBatch()">
+          Reanudar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <h1>IMA Generator</h1>
+      </div>
+
+      <div class="topbar-divider"></div>
+
+      <div class="topbar-controls">
+        <div class="control-group">
+          <span class="control-label">Formato</span>
+          <select class="format-select" id="formatSelect">
+            <option value="auto">Auto</option>
+            <option value="webp" selected>WebP</option>
+            <option value="avif">AVIF</option>
+            <option value="jpeg">JPEG</option>
+            <option value="png">PNG</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <span class="control-label">Límite</span>
+          <select class="format-select" id="sizeLimitSelect">
+            <option value="balanced" selected>Balanced</option>
+            <option value="conservative">Conservador</option>
+            <option value="aggressive">Agresivo</option>
+            <option value="none">Sin límite</option>
+          </select>
+        </div>
+
+        <div class="control-group hidden" id="projectNameGroup">
+          <span class="control-label">Proyecto</span>
+          <input type="text" class="format-select" id="projectNameInput" placeholder="nombre-del-proyecto" style="min-width:180px;text-transform:lowercase" />
+        </div>
+
+        <div class="topbar-dropzone" id="dropzone" onclick="document.getElementById('csvFile').click()">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" id="dropzoneIcon">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <div class="dropzone-text" id="dropzoneText">
+            <span id="dropzoneLabel">Arrastrá un CSV o hacé clic</span>
+            <div class="dropzone-filename hidden" id="fileName"></div>
+          </div>
+          <input type="file" id="csvFile" accept=".csv" onchange="handleFileSelect(event)">
+        </div>
+
+        <button class="btn btn-primary" id="btnProcess" onclick="startProcess()">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span>Iniciar</span>
+        </button>
+
+        <div class="exec-controls hidden" id="executionControls">
+          <button class="btn btn-secondary" id="btnPause" onclick="controlProcess('pause')">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            <span>Pausar</span>
+          </button>
+          <button class="btn btn-secondary hidden" id="btnResume" onclick="controlProcess('resume')">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span>Reanudar</span>
+          </button>
+          <button class="btn btn-danger" id="btnStop" onclick="controlProcess('stop')">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+            <span>Detener</span>
+          </button>
+        </div>
+
+        <button class="btn btn-ghost hidden" id="btnClear" onclick="clearAll()" title="Limpiar todo">
+          <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <!-- CSV Preview -->
+    <div class="csv-preview" id="csvPreview">
+      <div class="csv-preview-header">
+        <div class="csv-preview-title">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Archivo cargado
+          <span class="csv-preview-count" id="csvPreviewCount"></span>
+        </div>
+      </div>
+      <div class="csv-preview-list" id="csvPreviewList"></div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-card">
+        <div class="stat-number" id="statTotal">0</div>
+        <div class="stat-desc">Total</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number success" id="statSuccess">0</div>
+        <div class="stat-desc">Optimizadas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number danger" id="statErrors">0</div>
+        <div class="stat-desc">Errores</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="statOverLimit" style="color:var(--warning)">0</div>
+        <div class="stat-desc">Sobre límite</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number success" id="statSaved">0 KB</div>
+        <div class="stat-desc">Ahorrado</div>
+      </div>
+    </div>
+
+    <!-- Progress Section -->
+    <div class="progress-section" id="progressSection">
+      <div class="progress-top">
+        <span class="progress-title">Progreso</span>
+        <span class="status-badge status-idle" id="statusBadge">
+          <span class="status-dot"></span>
+          Esperando
+        </span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-info">
+        <span id="progressText">0 / 0 imágenes</span>
+        <span id="progressPercent">0%</span>
+      </div>
+      <div class="log-panel" id="logPanel">
+        <div class="log-entry">
+          <span class="log-time">--:--:--</span>
+          <span class="log-info">Listo para procesar</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="results-section" id="resultsSection">
+      <div class="results-header">
+        <div>
+          <span class="results-title">Resultados</span>
+          <span class="results-count" id="resultsCount"></span>
+        </div>
+        <div class="hidden" id="zipContainer">
+          <a id="zipLink" class="btn btn-success" href="#" download>
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Descargar ZIP</span>
+          </a>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Página</th>
+              <th>Imagen</th>
+              <th>Original</th>
+              <th>Optimizado</th>
+              <th>Ahorro</th>
+              <th>Dimensiones</th>
+              <th>Método</th>
+              <th>Formato</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="emptyResults">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <div class="empty-state-title">Sin resultados aún</div>
+        <p style="font-size:0.8125rem">Los resultados aparecerán aquí durante el procesamiento</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

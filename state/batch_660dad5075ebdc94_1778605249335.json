@@ -1,0 +1,17 @@
+{
+  "id": "batch_660dad5075ebdc94_1778605249335",
+  "csvHash": "660dad5075ebdc94",
+  "createdAt": "2026-05-12T17:00:49.335Z",
+  "totalRows": 266,
+  "status": "completed",
+  "completedIndices": [],
+  "errorIndices": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "format": "webp",
+  "projectName": "edu-consulting-auditoria-seo-febrero-2026img-100kb"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "batch_e3623cbc27c94aed_1779967844774",
+  "csvHash": "e3623cbc27c94aed",
+  "createdAt": "2026-05-28T11:30:44.774Z",
+  "totalRows": 1444,
+  "status": "completed",
+  "completedIndices": [],
+  "errorIndices": [
+    0,
+    1,
+    2
+  ],
+  "format": "webp",
+  "projectName": "muuktest-auditoria-seo-febrero-2026img-100kb-detal"
+}

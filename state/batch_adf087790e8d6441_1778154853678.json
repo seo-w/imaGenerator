@@ -1,0 +1,14 @@
+{
+  "id": "batch_adf087790e8d6441_1778154853678",
+  "csvHash": "adf087790e8d6441",
+  "createdAt": "2026-05-07T11:54:13.678Z",
+  "totalRows": 2,
+  "status": "completed",
+  "completedIndices": [
+    0
+  ],
+  "errorIndices": [
+    1
+  ],
+  "format": "webp"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "batch_96162004ef19b5c7_1778157514378",
+  "csvHash": "96162004ef19b5c7",
+  "createdAt": "2026-05-07T12:38:34.378Z",
+  "totalRows": 5,
+  "status": "completed",
+  "completedIndices": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "errorIndices": [
+    4
+  ],
+  "format": "webp"
+}
