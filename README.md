@@ -1,346 +1,491 @@
-# IMA Generator v3.0
+# IMA Generator v4.0
 
-Aplicación web para optimización masiva de imágenes. Lee un CSV con URLs de páginas e imágenes, mide el tamaño real de cada imagen en su contenedor, y genera versiones optimizadas en el formato más adecuado. Incluye optimización inteligente con límites de tamaño automáticos para cumplir con las alertas de Screaming Frog (< 100KB) y mejorar Core Web Vitals.
+Optimizador masivo de imágenes para cualquier sitio web.
 
-## Características Principales
+Dado un CSV de pares *página → imagen*, la app abre cada página en un navegador headless, **mide cuánto mide realmente cada imagen en su contenedor**, y genera una versión ajustada a ese ancho más una holgura configurable. Adicionalmente controla el peso del archivo para cumplir con las alertas de Screaming Frog (< 100KB) y mejorar Core Web Vitals.
 
-- **Procesamiento por CSV**: Soporta archivos CSV con delimitador coma (`,`) o punto y coma (`;`)
-- **Detección automática de encabezados**: Identifica y salta la fila de encabezados automáticamente
-- **Medición con Puppeteer**: Abre cada página en un navegador headless y mide el tamaño real de la imagen
-- **Formatos de salida**: WebP, AVIF, JPEG, PNG, o detección automática por CMS
-- **Optimización inteligente con límites**: Re-compresión automática en cascada si la imagen supera el límite de tamaño (calidad 82 → 70 → 55 → 40 + cambio de formato)
-- **Categorización automática**: Detecta si la imagen es hero, contenido o icono y aplica límites diferentes
-- **Cache inteligente**: Si una imagen se repite en el CSV, solo se descarga y optimiza una vez
-- **Progreso en tiempo real**: Server-Sent Events (SSE) muestran el avance imagen por imagen
-- **Controles de ejecución**: Pausar, reanudar o detener el proceso en cualquier momento
-- **Descarga masiva**: Genera un ZIP con todas las imágenes optimizadas
-- **Organización por proyecto**: Cada CSV genera su carpeta con subcarpetas por slug de URL
-- **Mapping CSV**: Trazabilidad completa de cada imagen procesada con categoría, calidad y warnings
-- **UI responsive**: Diseño adaptativo para móvil, tablet y desktop
-- **Indicadores visuales**: Filas coloreadas (amarillo/rojo) para imágenes sobre el límite, badges de categoría y calidad
-- **Fallback automático**: Si AVIF falla, cae automáticamente a WebP
+La idea central: **una imagen no debería pesar más de lo que su contenedor necesita**. Servir un JPEG de 2400px en un contenedor de 400px es el desperdicio que esta herramienta elimina.
+
+---
+
+## Los dos ejes de optimización
+
+Son independientes y conviene no confundirlos:
+
+| Eje | Qué decide | De dónde sale |
+|-----|-----------|---------------|
+| **Dimensión** | El ancho de salida | Medición del contenedor × holgura |
+| **Peso** | La calidad de compresión | Límite en KB según la categoría de la imagen |
+
+La dimensión manda. Si una imagen no puede bajar del límite de peso sin reducir su ancho por debajo del que necesita el contenedor, **se conserva el ancho y se reporta un `size_warning`**. Nunca se degrada la dimensión para cumplir un límite de peso.
+
+---
 
 ## Requisitos
 
 - Node.js 18+
-- Dependencias listadas en `package.json`
+- Chromium (lo instala `puppeteer` automáticamente)
 
-## Instalación
+## Instalación y uso
 
 ```bash
 npm install
 ```
 
-## Uso
-
 ```bash
 npm start
 ```
 
-La aplicación estará disponible en http://localhost:3000
+Disponible en http://localhost:3000
+
+---
 
 ## Formato del CSV
 
-El archivo CSV debe tener al menos 2 columnas:
+**Las dos únicas columnas obligatorias son la de página y la de imagen.** Todo lo demás es opcional, puede venir en cualquier orden, y puede no venir.
 
 ```csv
-url,imagen,selector
-https://ejemplo.com/pagina,https://ejemplo.com/imagen.jpg,.clase-imagen
+Url,Image
+https://ejemplo.com/contacto,https://ejemplo.com/img/banner.jpg
 ```
 
-### Columnas:
+### Cómo se identifican las columnas
 
-1. **url** (requerida): URL de la página donde se encuentra la imagen
-2. **imagen** (requerida): URL directa de la imagen a optimizar
-3. **selector** (opcional): Selector CSS para encontrar la imagen en la página
+**Si hay encabezado, el mapeo es por nombre**, no por posición. Así un `Url,Image,Size` y un `Url,Image,Size,Alt Text,Hecho` funcionan igual sin configurar nada.
 
-### Notas:
+| Rol | Requerido | Encabezados reconocidos |
+|-----|-----------|-------------------------|
+| Página | **Sí** | `url`, `address`, `page`, `página`, `page url`, `dirección`, `landing` |
+| Imagen | **Sí** | `image`, `imagen`, `img`, `src`, `image url`, `url de la imagen`, `source` |
+| Selector | No | `selector`, `css`, `css selector`, `elemento` |
+| Estado | No | `hecho`, `done`, `estado`, `status`, `listo`, `completado`, `procesado`, `revisado` |
+| Tamaño | No | `size`, `tamaño`, `peso`, `bytes`, `kb`, `file size` |
 
-- Se aceptan tanto comas (`,`) como punto y coma (`;`) como separadores
-- La primera fila se detecta automáticamente como encabezado y se ignora
-- Si no hay selector, la app busca la imagen por su URL en el DOM
+La columna de imagen se resuelve **antes** que la de página: un encabezado `Image URL` contiene la palabra "url" y si no, le robaría el puesto a la columna de página.
 
-## Arquitectura
+**Sin encabezado** se asume el orden `página, imagen, selector`.
 
-### Backend (`app.js`)
+### Columna de estado
 
-#### Dependencias
+Cuando el encabezado la identifica, se consulta **solo esa columna**. Valores que saltan la fila: `true`, `verdadero`, `hecho`, `done`, `completado`, `listo`, `ok`, `sí`, `1`, `x`, `yes`. Cualquier otro valor (incluido `falso` / `FALSO`) la procesa.
 
-- **express**: Servidor web
-- **multer**: Upload de archivos CSV
-- **sharp**: Optimización de imágenes
-- **puppeteer**: Navegación headless para medir tamaños
-- **csv-parse**: Parseo de archivos CSV
-- **archiver**: Generación de archivos ZIP
+> `VERDADERO`/`FALSO` es lo que escribe Excel y Google Sheets en español en las columnas booleanas — es el caso normal al abrir un export de Screaming Frog.
 
-#### Endpoints
+Sin encabezado no hay forma de saber qué columna es cuál, así que solo se acepta la **última** celda y solo con valores inequívocamente booleanos (`true`, `verdadero`, `hecho`, `done`, `completado`, `listo`). Nunca `1`, `x` ni `ok` sueltos: un `Size` de `1` byte no debe saltear una fila válida en silencio.
 
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| POST | `/api/process` | Inicia el procesamiento de imágenes vía SSE |
-| POST | `/api/control/:processId` | Controla un proceso en ejecución (pause/resume/stop) |
-| GET | `/api/output/:filename` | Descarga una imagen optimizada individual |
-| GET | `/api/download/:batchId.zip` | Descarga el ZIP con todas las imágenes |
-| GET | `/api/projects` | Lista todos los proyectos disponibles |
-| POST | `/api/check-state` | Verifica si hay un batch incompleto para un CSV |
-| GET | `/api/batches` | Lista todos los batches (completados e incompletos) |
+### Otras notas
 
-#### Flujo de Procesamiento
+- Delimitador auto-detectado entre `,` `;` `tab` `|`. Se elige el que produzca **más columnas** (la mediana), no el primero que dé dos — así una celda con `;` en un CSV de comas no rompe el parseo.
+- El encabezado se detecta descartando primero las celdas que parecen URL, y exigiendo que el keyword sea una **palabra** del encabezado y no un substring cualquiera. Sin eso, una fila de datos con `https://sitio.com/paginas/imagenes/...` se confunde con encabezado y se pierde la primera fila.
+- Se elimina el BOM y se normalizan los saltos de línea de Windows.
+- La columna de selector se usa solo si su valor *parece* un selector (empieza con `.`, `#`, `[`, `*` o letra).
 
-1. **Parseo del CSV**: Detección automática del delimitador y validación de columnas
-2. **Creación del navegador**: Un solo browser Puppeteer para todo el lote
-3. **Creación de carpeta de proyecto**: Se crea `output/{nombre-proyecto}/`
-4. **Por cada fila**:
-   - Verifica estado de control (paused/stopped)
-   - Mide la imagen en la página (si hay URL de página)
-   - Descarga la imagen original
-   - Optimiza con Sharp al formato seleccionado
-   - Guarda en subcarpeta según slug de la URL
-   - Envía evento SSE al cliente
-5. **Generación de mapping.csv**: Traza completa de todas las imágenes procesadas
-6. **Generación de ZIP**: Crea un ZIP con la carpeta completa del proyecto
-7. **Limpieza**: Auto-limpieza de archivos temporales cada hora
+> **La columna 1 es lo más importante del CSV.** Si empareja una imagen con una página donde esa imagen no está, no hay contenedor que medir y el ancho de salida sale de una heurística. Ver [Cuando no se puede medir](#cuando-no-se-puede-medir).
 
-#### Eventos SSE
+---
 
-| Evento | Descripción |
-|--------|-------------|
-| `start` | Inicio del procesamiento con total de imágenes |
-| `progress` | Actualización de progreso con estado actual |
-| `item` | Resultado de una imagen procesada |
-| `stopped` | Proceso detenido por el usuario |
-| `complete` | Proceso finalizado con resumen y URL del ZIP |
-| `error` | Error durante el procesamiento |
+## Medición: cómo funciona
 
-### Frontend (`public/`)
+### Una carga por página, no por fila
 
-#### Tecnologías
+Las filas se agrupan por URL de página. Cada página se abre **una sola vez** y se inventaría por completo; después el cruce contra el CSV se hace en Node.
 
-- HTML5 semántico
-- CSS3 con variables CSS y Grid/Flexbox
-- JavaScript vanilla (ES6+)
-- Server-Sent Events para comunicación en tiempo real
+En lotes reales el promedio es de ~3 imágenes por página, así que agrupar reduce las cargas de navegador aproximadamente a un tercio — y la carga de página domina el tiempo total del proceso.
 
-#### Componentes
+### Qué se inventaría
 
-- **Dropzone**: Área de arrastrar y soltar con feedback visual
-- **Selector de formato**: WebP, AVIF, JPEG, PNG, o Auto
-- **Selector de límite**: Balanced (default), Conservador, Agresivo, Sin límite
-- **Controles de ejecución**: Pausar, Reanudar, Detener
-- **Barra de progreso**: Con animación shimmer y porcentaje
-- **Panel de logs**: Terminal en tiempo real con colores
-- **Tabla de resultados**: Scroll horizontal en móvil, filas coloreadas por estado
-- **Estadísticas**: Total, optimizadas, errores, sobre límite, espacio ahorrado
-- **Toast notifications**: Mensajes temporales sin alerts
+De cada página se recolectan todas las imágenes renderizadas con el rect de su contenedor:
 
-#### Responsive Breakpoints
+- `<img>`: `currentSrc`, `src`, `data-src`, `data-lazy-src`, `data-original`, y **todos** los candidatos de `srcset`
+- `<picture>` / `<source>`: los `srcset` se atribuyen al rect del `<img>` hermano
+- `background-image`: resuelto vía **CSSOM** (se recorren las reglas que declaran `url(...)` y se consultan sus selectores), más los `style` inline. Si ninguna hoja de estilo es legible por CORS, se cae a un recorrido acotado del DOM
+- `<svg><image>`
 
-- **Mobile** (< 640px): Layout de una columna, controles táctiles grandes
-- **Tablet** (640px - 1023px): Tabla con scroll horizontal
-- **Desktop** (>= 1024px): Sidebar sticky + contenido principal
+### Niveles de match
 
-## Formato de Salida
+El cruce se resuelve en Node con niveles de confianza explícitos. Gana el de mayor confianza:
 
-### Nombre del Proyecto
+| Método | Confianza | Cuándo aplica |
+|--------|-----------|---------------|
+| `selector` | 100 | Selector CSS de la columna 3 |
+| `url-exact` | 90 | URL normalizada idéntica |
+| `path-exact` | 80 | Mismo pathname |
+| `basename-exact` | 70 | Mismo nombre base sin extensión ni sufijos |
+| `basename-normalized` | 60 | Igual sin acentos ni mayúsculas |
+| `basename-contains` | 45 | Uno contiene al otro (mín. 6 caracteres) |
+| `token-overlap` | 30 | ≥2 tokens compartidos y misma extensión |
 
-Al cargar un CSV, se propone un nombre de proyecto basado en el nombre del archivo. El usuario puede editarlo antes de iniciar el procesamiento. Las imágenes se organizan en:
+Normalizaciones que se aplican a ambos lados antes de comparar:
+
+- Percent-decoding: `10%20months%20(1).png` y `10 months (1).png` convergen
+- Query string y fragmento removidos: cubre los CDN que redimensionan por URL (`?width=1280&name=...`)
+- Sufijos de derivado apilados: `foto-scaled-1024x768.jpg` → `foto`
+- Diacríticos: `Fibra-Óptica` → `fibra-optica`
+
+**Ante empates gana el contenedor más grande.** Si la misma imagen aparece como thumbnail de 100px y como hero de 1200px, se genera un solo archivo: quedarse corto produce una imagen borrosa, sobrar cuesta unos KB.
+
+### Preparación de la página
+
+Antes de medir:
+
+- Se bloquean fuentes, media, websockets y los dominios de analytics/ads conocidos — no afectan el layout y dominan el tiempo de carga
+- Los `loading=lazy` se promueven a `eager` y los `data-src` se copian al `src`
+- Se recorre la página en pasos de un viewport (hasta 14) para disparar los `IntersectionObserver` del lazy loading
+- Se neutraliza el bloqueo de scroll (`overflow:hidden`) y se **ocultan** los overlays fijos que tapan el viewport
+
+> Sobre los banners de cookies: se **ocultan**, no se aceptan. Hacer clic en "Aceptar" sería consentir en nombre de quien ejecuta la herramienta, en un sitio de terceros. Ocultar el overlay logra lo mismo para medir.
+
+---
+
+## Holgura
+
+El ancho objetivo es `contenedor × factor + extra`. Configurable por lote:
+
+| Modo | Cálculo | Contenedor 400px | Contenedor 800px | Contenedor 1400px |
+|------|---------|------------------|------------------|-------------------|
+| **`+100px`** (default) | `+100` | 500px | 900px | 1500px |
+| `×1` | exacto | 400px | 800px | 1400px |
+| `×1.5` | `×1.5` | 600px | 1200px | 2100px |
+| `×2` | `×2` | 800px | 1600px | 2800px |
+
+`+100px` es el default por compatibilidad con el comportamiento histórico, pero tiene una limitación que conviene tener presente: la holgura relativa que aporta se diluye a medida que el contenedor crece (×1.25 a 400px, ×1.07 a 1400px). Para nitidez consistente en pantallas retina (DPR 2), `×1.5` o `×2` son más coherentes — a costa de más peso.
+
+**Nunca se agranda una imagen.** Si el original es más chico que el ancho objetivo, se conserva su tamaño.
+
+---
+
+## Cuando no se puede medir
+
+Si una imagen no aparece en el inventario de su página, el ancho **no se mide**: se estima con una heurística sobre el ancho original del archivo.
+
+| Ancho original | Ancho objetivo |
+|----------------|----------------|
+| > 1920px | 1600px |
+| > 1200px | 1200px |
+| > 800px | 800px |
+| > 400px | 600px |
+| ≤ 400px | sin redimensionar |
+
+Esto queda **explícitamente marcado**, no silenciado:
+
+- La UI muestra un badge naranja `sin medir` y el ancho con `~` adelante
+- El contador **Sin medir** aparece en la barra de estadísticas
+- El `mapping.csv` trae `medido=no` y el motivo en `metodo`
+- Si más del 25% del lote quedó sin medir, se emite un aviso al terminar
+
+Motivos posibles en la columna `metodo`:
+
+| Valor | Significado |
+|-------|-------------|
+| `no-encontrada` | La página cargó, pero esa imagen no está en ella |
+| `pagina-no-cargo` | Timeout, error de red o de navegación |
+| `sin-pagina` | La fila no traía URL de página |
+
+> Un porcentaje alto de `no-encontrada` casi siempre significa que **el CSV está mal armado**, no que la app falle. Es lo que pasa cuando el CSV se genera listando todas las imágenes referenciadas por el CSS o el tema del sitio en lugar de las que cada página renderiza: se emparejan imágenes con páginas donde no aparecen. Vale la pena revisar el CSV antes de aceptar los resultados.
+
+---
+
+## Categorías y límites de peso
+
+La categoría sale del ancho objetivo (o del original, si no hay objetivo):
+
+| Categoría | Ancho | Ejemplos |
+|-----------|-------|----------|
+| **Hero** | ≥ 1400px | Banners, portadas |
+| **Content** | 101–1399px | Cards, imágenes de artículo |
+| **Icon** | ≤ 100px | Logos, avatares |
+
+Límites en KB por modo:
+
+| Categoría | Conservador | **Balanced** (default) | Agresivo | Sin límite |
+|-----------|------------|------------------------|----------|------------|
+| Hero | 300 KB | 200 KB | 100 KB | — |
+| Content | 150 KB | 100 KB | 50 KB | — |
+| Icon | 50 KB | 30 KB | 20 KB | — |
+
+### Cascada de re-compresión
+
+Si el archivo supera su límite, se prueban calidades `82 → 70 → 55 → 40`, y en modo `auto` se comparan WebP y AVIF en cada escalón quedándose con el más chico. Se corta en cuanto uno entra bajo el límite.
+
+Un formato que deja de responder a las bajadas de calidad (variación < 1%) se descarta para los escalones siguientes, en lugar de re-comprimirlo en vano.
+
+Si ningún escalón alcanza el límite, se entrega el más chico obtenido con un `size_warning` que explica por qué.
+
+---
+
+## Formatos
+
+| Opción | Comportamiento |
+|--------|----------------|
+| **WebP** (default) | Mejor balance de compatibilidad y compresión |
+| **AVIF** | Máxima compresión, más lento de codificar |
+| **JPEG** | Máxima compatibilidad, con mozjpeg |
+| **PNG** | Con paleta cuando hay límite de peso (sin paleta, `quality` no tiene efecto) |
+| **Auto** | Codifica en WebP y AVIF y elige el más chico |
+
+Casos especiales:
+
+- **SVG**: se conserva intacto. Rasterizarlo le quita justamente lo que lo hace valioso.
+- **GIF/WebP animados**: se mantiene la animación y se fuerza WebP (el AVIF animado tiene soporte irregular).
+- **Si optimizar agranda el archivo**: cuando no hay que redimensionar y ninguna versión optimizada resulta más chica que el original (típico de imágenes que el CDN ya sirve optimizadas), **se conserva el original**. Un optimizador no debe entregar un archivo más pesado que el que recibió.
+
+---
+
+## Salida
 
 ```
 output/{proyecto}/
-├── {slug-pagina-1}/
-│   ├── 001-imagen.webp
+├── contacto/
+│   ├── 001-banner.webp
 │   └── 002-logo.webp
-├── {slug-pagina-2}/
-│   └── 003-hero.webp
+├── blog/mi-post/
+│   └── 001-hero.webp
+├── _inicio/              ← página raíz del dominio
+├── _sin-pagina/          ← filas sin URL de página
 └── mapping.csv
 ```
 
-### Subcarpetas por Slug
+- El slug preserva la jerarquía del path: `https://x.com/blog/mi-post` → `blog/mi-post/`
+- El prefijo numérico es un **contador por carpeta** (reinicia en `001` en cada slug), no el número de fila del CSV. El número de fila está en la columna `fila` del `mapping.csv`.
+- Ante nombres de archivo repetidos dentro de una carpeta se agrega un sufijo `_1`, `_2`…
 
-Cada URL de página genera una subcarpeta basada en su path:
-- `https://ejemplo.com/contacto` → `contacto/`
-- `https://ejemplo.com/blog/mi-post` → `blog/mi-post/`
-- Sin URL de página → `_sin-pagina/`
-
-Si dos dominios distintos tienen el mismo slug, se prefija con el dominio para evitar colisiones:
-- `https://sitio1.com/contacto` → `sitio1-com/contacto/`
-- `https://sitio2.com/contacto` → `sitio2-com/contacto/`
-
-### Prefijo Numérico
-
-Cada archivo lleva un prefijo de 3 dígitos que corresponde al número de fila en el CSV, facilitando la identificación: `001-banner.webp`, `002-logo.webp`, etc.
-
-### Mapping CSV
-
-Cada proyecto incluye un `mapping.csv` con la trazabilidad completa:
+### mapping.csv
 
 | Columna | Descripción |
 |---------|-------------|
-| `fila` | Número de fila en el CSV original |
-| `url_pagina` | URL de la página donde se encontró la imagen |
-| `url_imagen` | URL original de la imagen |
-| `slug` | Subcarpeta donde se guardó |
-| `archivo` | Nombre del archivo generado |
-| `formato` | Formato de salida (webp, avif, jpeg, png) |
-| `original_bytes` | Tamaño original en bytes |
-| `optimizado_bytes` | Tamaño optimizado en bytes |
-| `ahorro_pct` | Porcentaje de ahorro |
-| `metodo` | Método de detección usado |
-| `categoria` | Categoría detectada: hero, content, icon |
-| `calidad` | Calidad de compresión usada (1-100) |
-| `size_warning` | Mensaje de advertencia si no se pudo bajar del límite |
+| `fila` | Nº de fila en el CSV original |
+| `url_pagina` / `url_imagen` | URLs de entrada |
+| `slug` | Subcarpeta de salida |
+| `archivo` | Nombre generado (o `ERROR`) |
+| `formato` | Formato de salida |
+| `original_bytes` / `optimizado_bytes` | Pesos |
+| `ahorro_pct` | % de ahorro (negativo si creció) |
+| `ancho_original` / `ancho_final` | Dimensiones de la imagen |
+| `ancho_contenedor` | **Ancho medido del contenedor** (vacío si no se midió) |
+| `holgura` | Modo de holgura del lote |
+| `metodo` | Método de match, o el motivo si no se midió |
+| `medido` | `si` / `no` |
+| `categoria` | hero / content / icon |
+| `calidad` | Calidad usada |
+| `size_warning` | Por qué no pudo bajar del límite |
+| `error` | Mensaje de error de la fila |
 
-### Selección Manual
+Al reanudar, el `mapping.csv` se reescribe con el set **completo** (ejecuciones previas + nuevas), no solo con lo nuevo.
 
-El usuario puede elegir el formato global para todo el lote:
+---
 
-- **Auto**: Detecta el CMS de la URL y elige el formato óptimo
-- **WebP**: Mejor balance de calidad/compresión (default)
-- **AVIF**: Máxima compresión, puede no ser soportado por todos los navegadores
-- **JPEG**: Máxima compatibilidad
-- **PNG**: Sin pérdida de calidad
+## Vista de Proyectos
 
-### Detección Automática por CMS
+`output/` **no se borra automáticamente.** La pestaña *Proyectos* permite:
 
-| CMS | Formato |
-|-----|---------|
-| WordPress (`wp-content`, `wordpress`, `wp.com`) | AVIF (con fallback a WebP) |
-| HubSpot (`hubspot`, `hs-scripts`, `hubspotusercontent`) | WebP |
-| Otros / Auto | WebP |
+- Listar los proyectos con nº de imágenes, peso en disco, ahorro y avisos (errores, sin medir, sobre límite)
+- Ver las imágenes de cada proyecto agrupadas por slug, con miniatura, peso, ancho final y ancho de contenedor
+- Revisar las filas que fallaron y por qué
+- Re-generar el ZIP en cualquier momento
+- **Borrar un proyecto a mano** (elimina imágenes, `mapping.csv` y el estado de sus batches)
 
-## Optimización Inteligente con Límites
+Solo `uploads/` y `temp-zips/` se limpian automáticamente, a las 24h.
 
-### Categorización Automática
+---
 
-El sistema clasifica cada imagen según su tamaño medido en la página:
+## Control de ejecución y reanudación
 
-| Categoría | Ancho medido | Descripción |
-|-----------|-------------|-------------|
-| **Hero** | ≥ 1400px | Banners principales, imágenes de portada |
-| **Content** | 101-1399px | Imágenes de contenido, cards, sidebar |
-| **Icon** | ≤ 100px | Logos, iconos, avatares |
+Cada proceso tiene un `processId` y acepta `pause`, `resume` y `stop`. El estado se verifica antes de cada imagen y antes de cada página.
 
-### Límites de Tamaño por Modo
+Un proceso detenido queda en estado `stopped`, que **es reanudable**: al volver a cargar el mismo CSV, la app ofrece continuar desde donde quedó. Las filas ya completadas se saltan; las que dieron error se reintentan.
 
-| Categoría | Conservador | Balanced (default) | Agresivo |
-|-----------|------------|-------------------|----------|
-| Hero | 300 KB | 200 KB | 100 KB |
-| Content | 150 KB | 100 KB | 50 KB |
-| Icon | 50 KB | 30 KB | 20 KB |
+El estado vive en `state/`: `{batchId}.json` con los índices completados, y `{batchId}-results.jsonl` con un item por línea. Si el cliente cierra la pestaña, el proceso se detiene en lugar de seguir gastando CPU.
 
-### Estrategia de Re-compresión en Cascada
+---
 
-Cuando una imagen supera el límite, el backend intenta automáticamente:
+## Cache dentro del lote
 
-1. **Calidad 82** → conversión inicial
-2. **Calidad 70** → si supera el límite
-3. **Calidad 55** → si sigue superando
-4. **Calidad 40** → último intento antes de fallback
-5. **Cambio de formato** → WebP vs AVIF, elige el más pequeño en cada paso
+Si la misma imagen se repite (un logo en 200 páginas), se descarga y optimiza **una vez**. Las repeticiones **copian el archivo ya escrito**; no se retienen buffers en memoria, así que el consumo es constante independientemente del tamaño del lote.
 
-**Importante**: Las dimensiones NUNCA se reducen por debajo del tamaño medido + 100px (buffer retina). Esto garantiza que la imagen no quede pixelada al implementarla.
+La clave es `url | formato | ancho objetivo | límite`, calculada después de fijar el ancho objetivo definitivo.
 
-### Indicadores Visuales en la UI
+---
 
-| Estado | Color | Descripción |
-|--------|-------|-------------|
-| ✅ Normal | Blanco | Imagen dentro del límite |
-| ⚠️ Warning | Amarillo | Imagen sobre el límite pero optimizada al máximo posible |
-| ❌ Crítico | Rojo | Imagen > 300KB, no se pudo reducir significativamente |
-
-### Badges en la Tabla de Resultados
-
-- **Categoría**: `HERO`, `CONTENT`, `ICON` — tipo de imagen detectado
-- **Calidad**: `q55`, `q70`, etc. — calidad de compresión usada (solo si < 82)
-- **Size Warning**: `⚠ 145KB` — tamaño final cuando supera el límite (hover para ver detalle)
-
-## Control de Ejecución
-
-Cada proceso recibe un `processId` único. El endpoint `/api/control/:processId` acepta:
-
-- **pause**: Pausa el proceso después de la imagen actual
-- **resume**: Reanuda un proceso pausado
-- **stop**: Detiene el proceso definitivamente
-
-El estado se verifica antes de procesar cada imagen, permitiendo una respuesta inmediata.
-
-## Cache de Imágenes
-
-Para evitar descargas redundantes, se implementa un cache en memoria:
-
-- **Key**: `imageUrl|format|targetWidth`
-- **Valor**: Buffer optimizado + metadata
-- **Beneficio**: Si el mismo CSV tiene imágenes repetidas (como logos), solo se descargan una vez
-
-## Directorios
+## Arquitectura
 
 ```
-imaGenerator/
-├── app.js                 # Backend Express
-├── package.json           # Dependencias
-├── public/
-│   ├── index.html        # UI principal
-│   └── app.js            # Lógica del frontend
-├── uploads/              # CSVs temporales (auto-limpieza)
-├── output/               # Imágenes optimizadas organizadas por proyecto
-│   ├── mi-proyecto/
-│   │   ├── contacto/
-│   │   │   ├── 001-banner.webp
-│   │   │   └── 002-logo.webp
-│   │   ├── nosotros/
-│   │   │   └── 003-hero.webp
-│   │   └── mapping.csv
-│   └── otro-proyecto/
-│       └── ...
-├── temp-zips/            # ZIPs temporales (auto-limpieza)
-└── state/                # Estado de batches para reanudación
+app.js                 # Entry point: arma el servidor Express
+src/
+├── config.js          # Directorios, límites, holguras, constantes
+├── util.js            # URLs, slugs, rutas seguras, pMap
+├── csv.js             # Parseo del CSV y escritura del mapping
+├── state.js           # Persistencia de batches y reanudación
+├── control.js         # Pausar / reanudar / detener
+├── measure.js         # ★ Inventario de páginas y matching
+├── optimize.js        # Sharp: cascada, categorías, passthrough
+├── download.js        # Descarga con reintentos y Referer
+├── pipeline.js        # Orquestación del lote
+├── projects.js        # Explorar y borrar proyectos
+├── zip.js             # Empaquetado
+├── cleanup.js         # Limpieza de directorios efímeros
+└── routes.js          # Rutas HTTP
+public/
+├── index.html         # UI (CSS inline)
+└── app.js             # Lógica del frontend
 ```
 
-## Variables de Entorno
+### Endpoints
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/api/options` | Opciones de holgura y límite disponibles |
+| POST | `/api/process` | Procesa un CSV (SSE) |
+| POST | `/api/control/:processId` | `pause` / `resume` / `stop` |
+| POST | `/api/check-state` | ¿Hay un batch reanudable para este CSV? |
+| GET | `/api/batches` | Lista de batches |
+| DELETE | `/api/batches/:batchId` | Borra el estado de un batch |
+| GET | `/api/projects` | Lista de proyectos con métricas |
+| GET | `/api/projects/:name` | Detalle: imágenes por slug + errores |
+| GET | `/api/projects/:name/file/*` | Sirve una imagen del proyecto |
+| GET | `/api/projects/:name/download` | ZIP del proyecto, generado al pedido |
+| DELETE | `/api/projects/:name` | Borra el proyecto |
+| GET | `/api/output/*` | Sirve una imagen por ruta (soporta slugs anidados) |
+| GET | `/api/download/:batchId.zip` | ZIP del batch |
+
+Las rutas que sirven archivos resuelven el path y verifican que quede dentro del directorio permitido antes de leer.
+
+### Eventos SSE
+
+| Evento | Descripción |
+|--------|-------------|
+| `start` | Inicio: total, delimitador detectado, opciones del lote |
+| `resume` | Reanudación: cuántas ya estaban completadas |
+| `page` | Página inventariada: nº de imágenes encontradas vs. pedidas |
+| `progress` | Estado actual (`measuring`, `downloading`, `optimizing`, `packaging`) |
+| `item` | Resultado de una imagen |
+| `stopped` | Detenido por el usuario (reanudable) |
+| `complete` | Fin, con resumen y URL del ZIP |
+| `error` | Error |
+
+Se envía un comentario `: ping` cada 15s para que ningún proxy corte el stream.
+
+---
+
+## Variables de entorno
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
 | `PORT` | `3000` | Puerto del servidor |
 
-## Solución de Problemas
+Las constantes de comportamiento (concurrencia, timeouts, límites, holguras) están en [src/config.js](src/config.js).
+
+---
+
+## Limitaciones conocidas
+
+- **Solo se mide en desktop.** El viewport es 1920×1080 fijo. Un sitio donde una imagen se muestra más ancha en mobile que en desktop quedaría sub-dimensionada. Medir en ambos viewports y tomar el mayor está pendiente.
+- **No hay soporte para páginas con login.** No se pasan cookies ni credenciales.
+- **Los pseudo-elementos no se pueden medir.** Un `background-image` en `::before` / `::after` no existe en el DOM, así que no tiene rect. Esas imágenes caen en `no-encontrada`.
+- **El CSV no se valida contra las páginas antes de procesar.** Recién al terminar se sabe cuántas filas no se pudieron medir.
+
+---
+
+## Solución de problemas
 
 ### "El CSV no tiene filas válidas"
 
-- Verificar que el CSV tenga al menos 2 columnas
-- Asegurarse de que el separador sea coma (`,`) o punto y coma (`;`)
-- La primera fila puede ser encabezados (se detecta automáticamente)
+El mensaje incluye cuántas filas se leyeron y qué delimitador se detectó. Verificar que haya al menos dos columnas con contenido.
 
-### Puppeteer no encuentra la imagen
+### Muchas imágenes salen "sin medir"
 
-- Agregar un selector CSS en la tercera columna del CSV
-- Verificar que la imagen esté cargada en el DOM (no lazy-loaded sin scroll)
-- La app hace scroll automático para trigger lazy loading
+El caso más común, y casi siempre es el CSV. Verificar en el navegador que la imagen esté realmente en la página que dice la columna 1. Si está pero como `background-image` de un pseudo-elemento, no hay forma de medirla: usar la columna `selector` apuntando al contenedor.
 
-### AVIF falla
+### Una imagen no baja del límite de peso
 
-- El formato cae automáticamente a WebP
-- Para forzar WebP, seleccionarlo manualmente en el dropdown
+Es el comportamiento esperado cuando el contenedor es grande: la dimensión tiene prioridad sobre el peso. Para heros de 1400px+ es normal superar 100KB — usar modo *Conservador*. El `size_warning` del `mapping.csv` explica el caso concreto.
 
-### Imagen supera el límite de tamaño
+### Una imagen quedó más grande que el original
 
-- El sistema intenta automáticamente múltiples niveles de compresión
-- Si no puede bajar del límite, la fila se marca en amarillo (warning) o rojo (crítico)
-- El `mapping.csv` incluye la columna `size_warning` con la explicación
-- Para imágenes hero > 1400px, es normal que superen 100KB — usar modo "Conservador"
-- Para contenido general, el modo "Balanced" (100KB) cumple con Screaming Frog
-- El modo "Agresivo" es para sitios con requisitos estrictos de rendimiento
+No debería pasar: si no hay que redimensionar y optimizar la agranda, se conserva el original y se anota en `note`. Si aparece con `+%` en la tabla es porque **sí** hubo redimensionado y aun así creció, lo que indica un original con compresión muy agresiva.
+
+### El ZIP del batch da 404
+
+Los ZIP de `temp-zips/` se limpian a las 24h. El proyecto sigue en `output/`: descargarlo desde la pestaña *Proyectos*, que lo regenera.
+
+### Puppeteer no arranca
+
+Si falla el lanzamiento del navegador, el lote continúa sin medir (todo cae a la heurística) y se emite un `error` explicándolo. Reinstalar Chromium con `npx puppeteer browsers install chrome`.
+
+---
 
 ## Changelog
 
-### v3.0.1 (2026-05-28)
+### v4.0
 
-**Bugfix: `result is not defined` en procesamiento con cache**
+**Motor de medición reescrito**
 
-- **Problema**: Al procesar imágenes que ya estaban en cache, el backend lanzaba `ReferenceError: result is not defined` al guardar el archivo.
-- **Causa**: La variable `result` solo existía dentro del bloque `try` del branch de descarga/optimización. Cuando una imagen venía del cache (branch `if (cached)`), esa variable nunca se definía, pero se referenciaba en 3 lugares fuera del scope:
-  - Construcción de `successItem` (líneas 1405, 1407)
-  - Construcción de `mappingRows` (líneas 1431-1433)
-- **Fix**: Reemplazar todas las referencias a `result?.*` por `cacheEntry?.*`, leyendo directamente del cache (`imageCache.get(cacheKey)`) que siempre está populado en ambos caminos (cache hit o miss).
+- Las filas se agrupan por página: **una carga de navegador por página** en lugar de una por fila (~3× menos cargas en lotes reales).
+- El matching se movió de `page.evaluate` a Node, con niveles de confianza explícitos y testeable de forma aislada.
+- Corregido el bug de encoding que impedía todo match cuando la URL traía caracteres escapados: el nombre del CSV se comparaba percent-encoded (`10%20months%20(1)`) contra el del DOM decodificado (`10 months (1)`).
+- Los `background-image` se resuelven vía CSSOM en lugar de `querySelectorAll('*')` + `getComputedStyle` por elemento.
+- Se recolectan todos los candidatos de `srcset`, no solo el primero.
+- Nuevos motivos explícitos cuando no se puede medir (`no-encontrada`, `pagina-no-cargo`, `sin-pagina`) en lugar de un `fallback-resize` genérico, más aviso cuando supera el 25% del lote.
+
+**Bugs corregidos**
+
+- **Detener rompía la reanudación**: el batch se marcaba `completed` incluso al detenerse, así que `check-state` no lo encontraba nunca. Ahora queda `stopped`, que es reanudable.
+- **Pausar y luego detener colgaba el proceso**: la Promise de pausa solo se resolvía al pasar a `running`, nunca a `stopped`.
+- **"Sin límite" no hacía nada**: el frontend enviaba `aggressiveness=none` y el backend leía un parámetro `sizeLimit` que nunca llegaba; `limits['none']` caía a `balanced`. Se aplicaban los límites de Balanced en silencio.
+- **Todas las descargas individuales daban 404**: apuntaban a `/api/output/{archivo}` con un solo segmento de ruta, pero las imágenes viven en `{proyecto}/{slug}/{archivo}`.
+- **Path traversal** en `/api/output/:filename`: `..%2f..%2f..%2f..%2f..%2fetc%2fpasswd` servía cualquier archivo del disco. Ahora se resuelve el path y se verifica que quede dentro del directorio permitido.
+- **La categoría se calculaba siempre mal**: usaba `widthOriginal` doce líneas antes de asignarla, así que valía `undefined`. Una imagen sin medición ni fallback caía en `icon` y se comprimía a 30KB.
+- **El `mapping.csv` se perdía al reanudar**: se reescribía solo con las filas nuevas.
+- **La clave de cache se calculaba antes del fallback de ancho**, así que la tabla reportaba `original` en imágenes que sí se habían redimensionado.
+- **La limpieza automática borraba `output/` a las 24h** — y encima fallaba en silencio con slugs anidados (`blog/mi-post`), porque hacía `unlink` sobre un directorio. Ya no se toca `output/`.
+- **Consumo de memoria sin techo**: el cache retenía el buffer de cada imagen optimizada del lote (≈600MB en un lote de 1155). Ahora guarda la ruta y copia el archivo.
+- **La detección de delimitador elegía mal**: tomaba el primero que diera 2 columnas, así que una celda con `;` en un CSV de comas rompía el parseo. Ahora gana el que produzca más columnas.
+- **Los AVIF se guardaban como `.heif`**: Sharp reporta `info.format = 'heif'` para AVIF (que es un contenedor HEIF), y ese valor se usaba como nombre de formato y extensión. El nombre canónico ahora es el formato pedido.
+- **Un CSV sin encabezado perdía su primera fila**: `isHeaderRow` buscaba keywords como substring en las dos primeras celdas, así que una URL con `/paginas/` o `/imagenes/` se detectaba como encabezado. Ahora se descartan primero las celdas que parecen URL y el keyword tiene que ser una palabra completa del encabezado.
+- **El mapeo de columnas era posicional**: la columna 3 se evaluaba como selector-o-estado y la 4 como estado. Con un `Url,Image,Size` el tamaño se leía como estado, y con un `Url,Image,Size,Alt,Hecho` se leía `Alt` como estado ignorando `Hecho`. Ahora, si hay encabezado, las columnas se identifican **por nombre** en cualquier orden y con cualquier cantidad de columnas extra.
+- **`VERDADERO` no se reconocía como fila hecha**: Excel y Google Sheets en español escriben `VERDADERO`/`FALSO` en las columnas booleanas, así que marcar filas como hechas no tenía ningún efecto y se reprocesaban todas.
+
+**Nuevo**
+
+- **Selector de holgura**: `+100px` (default), `×1`, `×1.5`, `×2`.
+- **Vista de Proyectos**: explorar los proyectos procesados con miniaturas y métricas, re-descargar el ZIP y borrarlos a mano.
+- **Columna "Contenedor"** en la tabla de resultados: ancho medido → ancho objetivo.
+- **Contador "Sin medir"** en las estadísticas.
+- Los SVG se conservan intactos en lugar de rasterizarse.
+- Los GIF/WebP animados conservan la animación.
+- Si optimizar agranda el archivo, se conserva el original.
+- `Referer` en las descargas: varios CDN devuelven 403 sin él.
+- Se detecta cuando el servidor responde HTML en lugar de una imagen, en lugar de fallar más tarde con un error confuso de Sharp.
+- No se reintentan errores permanentes (404, 403, 410).
+- Descarga y optimización con concurrencia 4 dentro de cada página.
+- Se bloquean fuentes, media y dominios de analytics durante la medición.
+- `.gitignore` (el repo tenía `node_modules` versionado: 6281 archivos).
+
+**Optimizaciones**
+
+- Se eliminaron los `sharp().metadata()` redundantes: las dimensiones finales salen del `info` que Sharp ya devuelve, sin un decode extra por candidato.
+- PNG usa paleta cuando hay límite de peso; antes `quality` no tenía efecto y la cascada re-comprimía cuatro veces un buffer idéntico.
+- AVIF con `effort: 4` en lugar de 6: el ahorro extra era marginal y costaba el doble de CPU.
+- Un formato que deja de responder a las bajadas de calidad se descarta para los escalones siguientes.
+- El estado del batch se vuelca a disco como máximo una vez por segundo, en lugar de serializar el array de índices en cada imagen.
+
+**Estructura**
+
+- `app.js` pasó de 1668 líneas con todo mezclado a un entry point de ~35 líneas, con la lógica en 12 módulos bajo `src/`.
+- Código muerto eliminado: `createZip` (deprecado), `formatFromCMS` (devolvía siempre `'auto'`), `slugKey` (se calculaba y no se usaba), `aggressiveFallback` (declarado y nunca leído).
+
+**Documentación**
+
+Se quitaron del README tres features que estaban documentadas pero no implementadas:
+
+- *Detección de formato por CMS* (WordPress→AVIF, HubSpot→WebP): `detectCMS()` funcionaba pero su resultado se descartaba.
+- *Prefijo de dominio ante colisiones de slug*: la clave se calculaba pero nunca se usaba para la carpeta.
+- *"El prefijo numérico corresponde al número de fila del CSV"*: es un contador por carpeta.
+
+### v3.0.1
+
+Bugfix: `result is not defined` al procesar imágenes desde el cache. La variable solo existía dentro del `try` de la rama de descarga, pero se referenciaba en la construcción del item y del mapping.
+
+---
 
 ## Licencia
 

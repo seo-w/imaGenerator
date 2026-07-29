@@ -861,6 +861,201 @@
 
     .modal-actions .btn { flex: 1; }
 
+    /* ── Tabs ──────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: -4px;
+    }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 16px;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: var(--transition);
+      margin-bottom: -1px;
+    }
+
+    .tab:hover { color: var(--text-secondary); }
+
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-count {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      background: var(--border-light);
+      color: var(--text-secondary);
+      padding: 1px 6px;
+      border-radius: 99px;
+    }
+
+    .tab.active .tab-count { background: var(--accent-light); color: var(--accent-dark); }
+
+    /* ── Panel genérico ────────────────────────────────────── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-light);
+      flex-wrap: wrap;
+    }
+
+    .panel-header > div:first-child {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    /* ── Lista de proyectos ────────────────────────────────── */
+    .project-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto auto;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-light);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .project-row:last-child { border-bottom: none; }
+    .project-row:hover { background: var(--border-light); }
+
+    .project-name {
+      font-weight: 600;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .project-name svg { color: var(--accent); flex-shrink: 0; }
+
+    .project-name span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .project-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .project-meta strong {
+      display: block;
+      font-size: 0.8125rem;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .project-meta.good strong { color: var(--success); }
+    .project-meta.warn strong { color: var(--warning); }
+    .project-meta.bad strong { color: var(--danger); }
+
+    /* ── Detalle de proyecto ───────────────────────────────── */
+    .slug-group { border-bottom: 1px solid var(--border-light); }
+    .slug-group:last-child { border-bottom: none; }
+
+    .slug-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 18px;
+      background: var(--border-light);
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--text-secondary);
+    }
+
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+      padding: 14px 18px;
+    }
+
+    .image-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: var(--surface);
+      transition: var(--transition);
+    }
+
+    .image-card:hover { box-shadow: var(--shadow); border-color: var(--accent); }
+
+    .image-thumb {
+      display: block;
+      width: 100%;
+      height: 110px;
+      object-fit: contain;
+      background:
+        repeating-conic-gradient(var(--border-light) 0% 25%, var(--surface) 0% 50%) 50% / 16px 16px;
+    }
+
+    .image-info {
+      padding: 8px 10px;
+      font-size: 0.6875rem;
+      line-height: 1.45;
+      border-top: 1px solid var(--border-light);
+    }
+
+    .image-info .fname {
+      font-weight: 600;
+      font-size: 0.75rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .image-info .dim { color: var(--text-muted); }
+    .image-info .saved { color: var(--success); font-weight: 600; }
+
+    /* ── Badges de medición ────────────────────────────────── */
+    .badge-measured {
+      background: var(--success-light);
+      color: #047857;
+    }
+
+    .badge-unmeasured {
+      background: var(--warning-light);
+      color: #92400e;
+    }
+
+    .cell-container { font-size: 0.75rem; white-space: nowrap; }
+
     /* ── Hidden ────────────────────────────────────────────── */
     .hidden { display: none !important; }
 
@@ -949,6 +1144,16 @@
           </select>
         </div>
 
+        <div class="control-group">
+          <span class="control-label" title="Cuánto más ancha que su contenedor se genera la imagen">Holgura</span>
+          <select class="format-select" id="holguraSelect">
+            <option value="100px" selected>+100px</option>
+            <option value="1x">×1 (exacto)</option>
+            <option value="1.5x">×1.5</option>
+            <option value="2x">×2 (retina)</option>
+          </select>
+        </div>
+
         <div class="control-group hidden" id="projectNameGroup">
           <span class="control-label">Proyecto</span>
           <input type="text" class="format-select" id="projectNameInput" placeholder="nombre-del-proyecto" style="min-width:180px;text-transform:lowercase" />
@@ -995,6 +1200,61 @@
 
   <!-- Main Content -->
   <div class="main-content">
+    <!-- View Tabs -->
+    <nav class="tabs" role="tablist">
+      <button class="tab active" id="tabProcess" role="tab" aria-selected="true" onclick="switchView('process')">
+        <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Procesar
+      </button>
+      <button class="tab" id="tabProjects" role="tab" aria-selected="false" onclick="switchView('projects')">
+        <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Proyectos
+        <span class="tab-count" id="tabProjectsCount"></span>
+      </button>
+    </nav>
+
+    <!-- ══ Vista: Proyectos ══ -->
+    <div id="viewProjects" class="hidden">
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <span class="results-title">Proyectos procesados</span>
+            <span class="results-count" id="projectsSummary"></span>
+          </div>
+          <button class="btn btn-secondary" onclick="loadProjects()">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            <span>Actualizar</span>
+          </button>
+        </div>
+        <div id="projectsList"></div>
+      </div>
+
+      <div class="panel hidden" id="projectDetail">
+        <div class="panel-header">
+          <div>
+            <button class="btn btn-ghost" onclick="closeProjectDetail()" title="Volver">
+              <svg class="icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            </button>
+            <span class="results-title" id="projectDetailName"></span>
+            <span class="results-count" id="projectDetailMeta"></span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <a class="btn btn-success" id="projectDetailZip" href="#">
+              <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>ZIP</span>
+            </a>
+            <button class="btn btn-danger" id="projectDetailDelete">
+              <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <span>Borrar</span>
+            </button>
+          </div>
+        </div>
+        <div id="projectDetailBody"></div>
+      </div>
+    </div>
+
+    <!-- ══ Vista: Procesar ══ -->
+    <div id="viewProcess">
     <!-- CSV Preview -->
     <div class="csv-preview" id="csvPreview">
       <div class="csv-preview-header">
@@ -1024,6 +1284,10 @@
       <div class="stat-card">
         <div class="stat-number" id="statOverLimit" style="color:var(--warning)">0</div>
         <div class="stat-desc">Sobre límite</div>
+      </div>
+      <div class="stat-card" title="Imágenes que no se encontraron en su página: el ancho salió de una heurística, no de una medición">
+        <div class="stat-number" id="statUnmeasured" style="color:var(--warning)">0</div>
+        <div class="stat-desc">Sin medir</div>
       </div>
       <div class="stat-card">
         <div class="stat-number success" id="statSaved">0 KB</div>
@@ -1079,8 +1343,9 @@
               <th>Original</th>
               <th>Optimizado</th>
               <th>Ahorro</th>
+              <th title="Ancho medido del contenedor → ancho objetivo con holgura">Contenedor</th>
               <th>Dimensiones</th>
-              <th>Método</th>
+              <th>Medición</th>
               <th>Formato</th>
               <th></th>
             </tr>
@@ -1098,6 +1363,7 @@
         <p style="font-size:0.8125rem">Los resultados aparecerán aquí durante el procesamiento</p>
       </div>
     </div>
+    </div><!-- /viewProcess -->
   </div>
 
   <script src="app.js"></script>

@@ -1,7 +1,7 @@
 {
   "name": "ima-generator",
-  "version": "3.0.1",
-  "description": "Optimizador de imágenes por página y CMS",
+  "version": "4.0.0",
+  "description": "Optimizador masivo de imágenes: mide el contenedor real de cada imagen y la ajusta a ese tamaño",
   "type": "module",
   "main": "app.js",
   "scripts": {
